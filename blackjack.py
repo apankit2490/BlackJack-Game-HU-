@@ -51,6 +51,12 @@ class Card:
     def __str__(self):
         return f'{self.type.value}'
 
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        return self.type == other.type
+
 
 class Player:
     """
@@ -131,11 +137,14 @@ class BlackJack:
     representation of the result of each player.
     """
 
-    def __init__(self, player_names):
+    def __init__(self, player_names, deck=None):
         assert player_names, 'At least one player is required.'
         self._players = [Player(name) for name in player_names]
         self._dealer = Player('Dealer')
-        self._deck = Deck(num_decks=2)
+        if deck is None:
+            self._deck = Deck(num_decks=2)
+        else:
+            self._deck = deck
         # When this is None, it means the game has ended.
         self._current_player = self._players[0]
 
@@ -172,16 +181,35 @@ class BlackJack:
         while sum_cards(self._dealer.hand) < 17:
             self._dealer.hit(self._deck.draw_card())
 
-    def get_game_state_str(self, show_hole=True):
-        player_strings = []
-        for player in self._players:
-            cards_str = ', '.join(str(c) for c in player.hand)
-            player_strings.append(f"{player.name} ({'BUST' if player.is_bust() else sum_cards(player.hand)}):\n\t{cards_str}")
+    def get_game_state(self):
+        state = {'finished': self.game_finished(),
+                 'current_player': None if self.game_finished() else self._current_player.name,
+                 'players': {p.name: {'hand': p.hand,
+                                      'bust': p.is_bust()}
+                             for p in self._players},
+                 'dealer': {'hand': self._dealer.hand,
+                            'bust': self._dealer.is_bust()}}
+        return state
+
+    def _player_str(self, name, hand, is_bust):
+        cards_str = ', '.join(str(c) for c in hand)
+        player_str = f"{name} ({'BUST' if is_bust else sum_cards(hand)}):\n\t{cards_str}"
+        return player_str
+
+    def _dealer_str(self, hand, is_bust, show_hole=True):
         cards_str = ', '.join(str(c) for c in self._dealer.hand) if show_hole else f"{self._dealer.hand[0]}, X"
-        player_strings.append(f"Dealer ({'BUST' if self._dealer.is_bust() else sum_cards(self._dealer.hand) if show_hole else 'X'}):\n\t{cards_str}")
+        dealer_str = f"Dealer ({'BUST' if self._dealer.is_bust() else sum_cards(self._dealer.hand) if show_hole else 'X'}):\n\t{cards_str}"
+        return dealer_str
+
+    def get_game_state_str(self, show_hole=True):
+        state = self.get_game_state()
+        player_strings = [self._player_str(name, p_state['hand'], p_state['bust'])
+                          for name, p_state in state['players'].items()]
+        dealer = state['dealer']
+        player_strings.append(self._dealer_str(dealer['hand'], dealer['bust'], show_hole))
         return '\n\n'.join(player_strings)
 
-    def get_game_result_str(self):
+    def get_game_result(self):
         assert self._current_player is None, "Game has not ended yet."
         player_results = {}
         for player in self._players:
@@ -209,6 +237,10 @@ class BlackJack:
                         result = 'PUSH'
             assert result is not None
             player_results[player.name] = result
+        return player_results
+
+    def get_game_result_str(self):
+        player_results = self.get_game_result()
         return "\n".join(f'{name}: {result}' for name, result in player_results.items())
 
 
