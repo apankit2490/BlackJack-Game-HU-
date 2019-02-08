@@ -1,4 +1,5 @@
-from unittest import TestCase
+from unittest import TestCase, main
+from pprint import pformat
 
 from blackjack import BlackJack, Deck, Card
 
@@ -49,6 +50,62 @@ class MockDeck(Deck):
         super().__init__()
         self.cards = make_cards(reversed(card_codes))
 
+GAME_TESTS = [
+    {
+        # p2 shoud bust, p1 (20) should lose against dealer (21)
+        "players": ['p1', 'p2'],
+        "cards": [
+            'a', '2',
+            '3', '4',
+            '5', '6',
+            '7', '8', '9', '10',
+        ],
+        "moves": {
+            'p1': ['h', 's'],
+            'p2': ['h', 'h'],
+        },
+        "results": {
+            'p1': 'LOST',
+            'p2': 'BUST',
+        }
+    },
+    {
+        # p2 should go bust, p1 (20) should win against dealer (bust)
+        "players": ['p1', 'p2'],
+        "cards": [
+            'a', '2',
+            '3', '4',
+            '5', '10',
+            '7', '8', '9', '10',
+        ],
+        "moves": {
+            'p1': ['h', 's'],
+            'p2': ['h', 'h'],
+        },
+        "results": {
+            'p1': 'WON',
+            'p2': 'BUST',
+        }
+    },
+    {
+        # p1 (4) and p2 (4) should lose against dealer (bust)
+        "players": ['p1', 'p2'],
+        "cards": [
+            '2', '2',
+            '2', '2',
+            'a', 'k',
+        ],
+        "moves": {
+            "p1": ['s'],
+            "p2": ['s'],
+        },
+        "results": {
+            "p1": "LOST",
+            "p2": "LOST",
+        }
+    }
+]
+
 
 class BlackjackTestCase(TestCase):
 
@@ -61,11 +118,15 @@ class BlackjackTestCase(TestCase):
                                 msg=f"There must be atleast 2 cards each for each player and the "
                                     f"dealer, got {len(cards)} between {len(players)} players")
         bj = BlackJack(players, deck=MockDeck(cards))
-        for move in moves:
-            if move == 'h':
-                bj.hit_current_player()
-            elif move == 's':
-                bj.stand_current_player()
+        for player, player_moves in moves.items():
+            for move in player_moves:
+                self.assertEqual(player, bj.get_current_player_name(), msg=f"It is not {player}'s turn. Game state:\n{pformat(bj.get_game_state())}")
+                if move == 'h':
+                    bj.hit_current_player()
+                elif move == 's':
+                    bj.stand_current_player()
+                else:
+                    raise ValueError(move)
         return bj
 
     def test_dealing_initial_cards(self):
@@ -74,7 +135,7 @@ class BlackjackTestCase(TestCase):
         """
         players = ['player1', 'player2', 'player3', 'player4']
         cards = ['a', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'k', 'q', 'j']
-        bj = self._run_game(players=players, cards=cards, moves=[])
+        bj = self._run_game(players=players, cards=cards, moves={})
         game_state = bj.get_game_state()
         # Check each player got the right cards
         for i, player in enumerate(players):
@@ -82,12 +143,27 @@ class BlackjackTestCase(TestCase):
         # Check that the dealer got the right cards
         self.assertEqual(game_state['dealer']['hand'], make_cards(cards[len(players) * 2: len(players) * 2 + 2]))
 
-    def test_blackjack(self):
-        players = ['nishant']
-        cards = ['10', '10', '3', '4', 'a', '5', '6']
-        moves = ['h', 's']
+    def _test_blackjack(self, players, cards, moves, results):
         bj = self._run_game(players=players, cards=cards, moves=moves)
         game_state = bj.get_game_state()
-        self.assertTrue(game_state['finished'])
+        self.assertTrue(game_state['finished'], msg=f'Game has not finished. Game state:\n{pformat(game_state)}')
         game_results = bj.get_game_result()
-        self.assertEqual(game_results[players[0]], 'WON')
+        for player, expected_result in results.items():
+            actual_result = game_results[player]
+            self.assertEqual(actual_result, expected_result, msg=pformat(bj.get_game_state()))
+
+    def test_blackjack(self):
+        for game in GAME_TESTS:
+            players = game['players']
+            cards = game['cards']
+            moves = game['moves']
+            results = game['results']
+            try:
+                self._test_blackjack(players, cards, moves, results)
+            except Exception:
+                print(f"FAILED:\n{pformat(game)}")
+                raise
+
+
+if __name__ == '__main__':
+    main()
